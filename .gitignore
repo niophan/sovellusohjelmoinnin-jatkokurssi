@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+
+# Android Studio
+.idea/
+*.iml
+
+# Local machine configuration
+local.properties
+
+# Secrets and API keys
+.env
+.env.*
+secrets.properties
+google-services.json
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
