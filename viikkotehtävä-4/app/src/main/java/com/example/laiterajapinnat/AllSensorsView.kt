@@ -1,7 +1,9 @@
 package com.example.laiterajapinnat
 
+import android.content.Context
 import android.hardware.Sensor
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,16 +24,28 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.launch
+
+private val Context.sensorDataStore by preferencesDataStore(name = "sensor")
+private val anturiKey = stringPreferencesKey("last_searched_sensor")
 
 @Composable
 fun AllSensorsView(
@@ -39,6 +53,24 @@ fun AllSensorsView(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val preferences by context.sensorDataStore.data.collectAsState(initial = emptyPreferences())
+    val lastSearchedAnturi = preferences[anturiKey]
+
+    fun saveSearchQuery(query: String) {
+        onSearchQueryChange(query)
+        if (query.isNotBlank()) {
+            scope.launch {
+                context.sensorDataStore.edit { prefs ->
+                    prefs[anturiKey] = query
+                }
+            }
+        }
+    }
+
+
     val filteredSensors = remember(sensors, searchQuery) {
         if (searchQuery.isBlank()) {
             sensors
@@ -56,9 +88,23 @@ fun AllSensorsView(
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
+        val lastSearchText = if (!lastSearchedAnturi.isNullOrBlank()) {
+            "Viimeisin haku: $lastSearchedAnturi"
+        } else {
+            "Ei aiempaa hakua"
+        }
+
+        Text(
+            text = lastSearchText,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+
         OutlinedTextField(
             value = searchQuery,
-            onValueChange = onSearchQueryChange,
+            onValueChange = { saveSearchQuery(it) },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
@@ -71,7 +117,7 @@ fun AllSensorsView(
             },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }) {
+                    IconButton(onClick = { saveSearchQuery("") }) {
                         ClearIcon(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
@@ -95,16 +141,30 @@ fun AllSensorsView(
             modifier = Modifier.fillMaxSize()
         ) {
             items(filteredSensors) { sensor ->
-                SensorItemCard(sensor = sensor)
+                SensorItemCard(
+                    sensor = sensor,
+                    onClick = {
+                        scope.launch {
+                            context.sensorDataStore.edit { prefs ->
+                                prefs[anturiKey] = sensor.name
+                            }
+                        }
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun SensorItemCard(sensor: Sensor) {
+fun SensorItemCard(
+    sensor: Sensor,
+    onClick: () -> Unit = {}
+) {
     OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(
